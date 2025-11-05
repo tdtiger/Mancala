@@ -11,6 +11,11 @@ let offsetX;
 let offsetY;
 let pitPositions = [];
 
+const PVP = "Player_vs_Player";
+const PVC = "Player_vs_Computer";
+let currentMode;
+let currentPlayer;
+
 function setup(){
     createCanvas(windowWidth, windowHeight);
 
@@ -18,6 +23,9 @@ function setup(){
     board = Array(14).fill(4);
     board[p1Goal] = 0;
     board[p2Goal] = 0;
+
+    currentMode = PVC;
+    currentPlayer = 1;
 
     CalculateLayout();
     noLoop();
@@ -36,11 +44,36 @@ function draw(){
         DrawPit(pitPositions[p2Pits[i]], board[p2Pits[i]], "P2");
         DrawPit(pitPositions[p1Pits[i]], board[p1Pits[i]], "P1");
     }
+
+    fill(255);
+    noStroke();
+    textAlign(CENTER, CENTER);
+    textSize(18);
+    let boardCenter = (pitSize * 8) / 2;
+    
+    if(currentPlayer === 1)
+            text("プレイヤー1のターン", boardCenter, -pitSize / 2);
+    else{
+        if(currentMode === PVC)
+            text("CPUのターン", boardCenter, -pitSize / 2);
+        else if(currentMode === PVP)
+            text("プレイヤー2のターン", boardCenter, -pitSize / 2);
+    }
+
 }
 
 function mousePressed(){
     let clickX = mouseX - offsetX;
     let clickY = mouseY - offsetY;
+
+    let canClick = false;
+    if(currentPlayer === 1)
+        canClick = true;
+    else if(currentPlayer === 2 && currentMode === PVP)
+        canClick = true;
+
+    if(!canClick)
+        return;
 
     for(let i = 0; i < 14; i++){
         // ゴール内をクリックしていた時は何もしない
@@ -51,7 +84,10 @@ function mousePressed(){
         let d = dist(clickX, clickY, pos.x, pos.y);
 
         if(d < pos.size / 2){
-            HandleMove(i);
+            if(currentPlayer === 1 && p1Pits.includes(i))
+                HandleMove(i);
+            else if(currentPlayer === 2 && p2Pits.includes(i))
+                HandleMove(i);
             return;
         }
     }
@@ -126,13 +162,29 @@ function DrawSeeds(x, y, w, h, count){
     }
 }
 
-// とりあえず次の穴に全ての種を動かす仮実装
 function HandleMove(clickedIndex){
     let seedsToMove = board[clickedIndex];
     board[clickedIndex] = 0;
 
-    let nextIndex = (clickedIndex + 1) % 14;
-    board[nextIndex] += seedsToMove;
+    let pos;
+    for(pos = 1; pos <= seedsToMove; pos++)
+        board[(clickedIndex + pos) % 14] += 1;
+
+    if(currentPlayer === 1){
+        currentPlayer = 2;
+
+        if(currentMode === PVC)
+            CallAI();
+    }
+    else
+        currentPlayer = 1;
 
     redraw();
+}
+
+function CallAI(){
+    setTimeout(() =>{
+        let aiMove = p2Pits[floor(random(6))];
+        HandleMove(aiMove);
+    }, 500);
 }
