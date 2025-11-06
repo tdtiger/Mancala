@@ -63,6 +63,9 @@ function draw(){
 }
 
 function mousePressed(){
+    if(CheckGameEnd())
+            return;
+
     let clickX = mouseX - offsetX;
     let clickY = mouseY - offsetY;
 
@@ -85,9 +88,23 @@ function mousePressed(){
 
         if(d < pos.size / 2){
             if(currentPlayer === 1 && p1Pits.includes(i))
-                HandleMove(i);
+                turnChange = HandleMove(i);
             else if(currentPlayer === 2 && p2Pits.includes(i))
-                HandleMove(i);
+                turnChange = HandleMove(i);
+            else
+                return;
+
+            if(turnChange){
+                currentPlayer = (currentPlayer === 1) ? 2 : 1;
+
+                redraw();
+
+                if(currentPlayer === 2 && currentMode === PVC)  
+                    CallAI();
+            }
+            if(CheckGameEnd())
+                HandleScoring();
+
             return;
         }
     }
@@ -163,28 +180,79 @@ function DrawSeeds(x, y, w, h, count){
 }
 
 function HandleMove(clickedIndex){
+    if(board[clickedIndex] === 0){
+        redraw();
+        return;
+    }
+
+    // 選択されたマスの種の数を取得し、0にする
     let seedsToMove = board[clickedIndex];
     board[clickedIndex] = 0;
 
-    let pos;
-    for(pos = 1; pos <= seedsToMove; pos++)
-        board[(clickedIndex + pos) % 14] += 1;
+    let currentIndex = clickedIndex;
+    let lastIndex = -1;
 
-    if(currentPlayer === 1){
-        currentPlayer = 2;
+    // 種を1つずつ次のマスに入れていく
+    while(seedsToMove > 0){
+        currentIndex = (currentIndex + 1) % 14;
 
-        if(currentMode === PVC)
-            CallAI();
+        board[currentIndex] += 1;
+        seedsToMove -= 1;
+
+        if(seedsToMove === 0)
+            lastIndex = currentIndex;
     }
-    else
-        currentPlayer = 1;
 
-    redraw();
+    let turnChange = true;
+    if(lastIndex === p1Goal || lastIndex === p2Goal)
+        turnChange = false;
+
+    return turnChange;
 }
 
 function CallAI(){
     setTimeout(() =>{
-        let aiMove = p2Pits[floor(random(6))];
-        HandleMove(aiMove);
+        let possible = [];
+        for(let i = 0; i < p2Pits.length; i++){
+            if(board[p2Pits[i]] > 0)
+                possible.push(p2Pits[i]);
+        }
+
+        let aiMove = random(possible);
+        let turnChange = HandleMove(aiMove);
+
+        if(turnChange)
+            currentPlayer = 1;
+        else
+            CallAI();
+        
+        if(CheckGameEnd())
+            HandleScoring();
+        else
+            redraw();
     }, 500);
+}
+
+function CheckGameEnd(){
+    let p1PitsEmpty = true;
+    for(let i = 0; i < p1Pits.length; i++){
+        if(board[p1Pits[i]] > 0){
+            p1PitsEmpty = false;
+            break;
+        }
+    }
+    let p2PitsEmpty = true;
+    for(let i = 0; i < p2Pits.length; i++){
+        if(board[p2Pits[i]] > 0){
+            p2PitsEmpty = false;
+            break;
+        }
+    }
+
+    return p1PitsEmpty || p2PitsEmpty;
+}
+
+function HandleScoring(){
+    redraw();
+    window.alert("ゲーム終了！");
 }
