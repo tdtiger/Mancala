@@ -11,59 +11,70 @@ let offsetX;
 let offsetY;
 let pitPositions = [];
 
+let gameState = "MENU";
+let menuButtons = [];
+
+const rules_basic = {
+    name: "ベーシック",
+    HandleMove: HandleMove_Basic,
+    CheckGameEnd: CheckGameEnd_Basic,
+    HandleScoring: HandleScoring_Basic
+}
+
 const PVP = "Player_vs_Player";
 const PVC = "Player_vs_Computer";
 let currentMode;
 let currentPlayer;
+let currentRule;
 
 function setup(){
     createCanvas(windowWidth, windowHeight);
-
-    // 各穴に4つずつ種を配置して、ゴールは0個にする
-    board = Array(14).fill(4);
-    board[p1Goal] = 0;
-    board[p2Goal] = 0;
-
-    currentMode = PVC;
-    currentPlayer = 1;
-
-    CalculateLayout();
+    DrawMenu();
     noLoop();
 }
 
 function draw(){
-    background(200, 180, 150);
-    translate(offsetX, offsetY);
-
-    // ゴールの描画
-    DrawPit(pitPositions[p2Goal], board[p2Goal], "P2 Goal");
-    DrawPit(pitPositions[p1Goal], board[p1Goal], "P1 Goal");
-
-    // 各穴の描画
-    for(let i = 0; i < 6; i++){
-        DrawPit(pitPositions[p2Pits[i]], board[p2Pits[i]], "P2");
-        DrawPit(pitPositions[p1Pits[i]], board[p1Pits[i]], "P1");
+    if(gameState === "MENU"){
+        background(200, 180, 150);
+        textAlign(CENTER, CENTER);
+        fill(255);
+        stroke(0);
+        textSize(40);
+        text("マンカラ", width / 2, height / 2 - 150);
     }
+    else if(gameState === "PLAYING"){
+        background(200, 180, 150);
+        translate(offsetX, offsetY);
 
-    fill(255);
-    noStroke();
-    textAlign(CENTER, CENTER);
-    textSize(18);
-    let boardCenter = (pitSize * 8) / 2;
+        // ゴールの描画
+        DrawPit(pitPositions[p2Goal], board[p2Goal], "P2 Goal");
+        DrawPit(pitPositions[p1Goal], board[p1Goal], "P1 Goal");
+
+        // 各穴の描画
+        for(let i = 0; i < 6; i++){
+            DrawPit(pitPositions[p2Pits[i]], board[p2Pits[i]], "P2");
+            DrawPit(pitPositions[p1Pits[i]], board[p1Pits[i]], "P1");
+        }
+
+        fill(255);
+        noStroke();
+        textAlign(CENTER, CENTER);
+        textSize(18);
+        let boardCenter = (pitSize * 8) / 2;
     
-    if(currentPlayer === 1)
+        if(currentPlayer === 1)
             text("プレイヤー1のターン", boardCenter, -pitSize / 2);
-    else{
-        if(currentMode === PVC)
-            text("CPUのターン", boardCenter, -pitSize / 2);
-        else if(currentMode === PVP)
-            text("プレイヤー2のターン", boardCenter, -pitSize / 2);
+        else{
+            if(currentMode === PVC)
+                text("CPUのターン", boardCenter, -pitSize / 2);
+            else if(currentMode === PVP)
+                text("プレイヤー2のターン", boardCenter, -pitSize / 2);
+        }
     }
-
 }
 
 function mousePressed(){
-    if(CheckGameEnd())
+    if(gameState !== "PLAYING" || currentRule.CheckGameEnd())
             return;
 
     let clickX = mouseX - offsetX;
@@ -86,24 +97,24 @@ function mousePressed(){
         let pos = pitPositions[i];
         let d = dist(clickX, clickY, pos.x, pos.y);
 
+        let turnChange = true;
         if(d < pos.size / 2){
             if(currentPlayer === 1 && p1Pits.includes(i))
-                turnChange = HandleMove(i);
+                turnChange = currentRule.HandleMove(i);
             else if(currentPlayer === 2 && p2Pits.includes(i))
-                turnChange = HandleMove(i);
+                turnChange = currentRule.HandleMove(i);
             else
                 return;
 
+            redraw();
             if(turnChange){
                 currentPlayer = (currentPlayer === 1) ? 2 : 1;
-
-                redraw();
-
                 if(currentPlayer === 2 && currentMode === PVC)  
                     CallAI();
             }
-            if(CheckGameEnd())
-                HandleScoring();
+
+            if(currentRule.CheckGameEnd())
+                currentRule.HandleScoring();
 
             return;
         }
@@ -113,6 +124,48 @@ function mousePressed(){
 function windowResized(){
     resizeCanvas(windowWidth, windowHeight);
     CalculateLayout();
+    redraw();
+}
+
+function DrawMenu(){
+    let btn_pvc = createButton("ベーシック(vs CPU)");
+    btn_pvc.position(width / 2 - 100, height / 2 - 40);
+    btn_pvc.size(200, 40);
+    btn_pvc.mousePressed(() => {
+        StartGame(rules_basic, PVC);
+    });
+    menuButtons.push(btn_pvc);
+
+    let btn_pvp = createButton("ベーシック(2人プレイ)");
+    btn_pvp.position(width / 2 - 100, height / 2 + 20);
+    btn_pvp.size(200, 40);
+    btn_pvp.mousePressed(() => {
+        StartGame(rules_basic, PVP);
+    });
+    menuButtons.push(btn_pvp);
+
+    let btn_future = createButton("カラハ(追加予定)");
+    btn_future.position(width / 2 - 100, height / 2 + 80);
+    btn_future.size(200, 40);
+    menuButtons.push(btn_future);
+}
+
+function StartGame(rule, mode){
+    for(let btn of menuButtons)
+            btn.hide();
+
+    currentRule = rule;
+    currentMode = mode;
+
+    board = Array(14).fill(4);
+    board[p1Goal] = 0;
+    board[p2Goal] = 0;
+    currentPlayer = 1;
+
+    CalculateLayout();
+
+    gameState = "PLAYING";
+
     redraw();
 }
 
@@ -179,7 +232,7 @@ function DrawSeeds(x, y, w, h, count){
     }
 }
 
-function HandleMove(clickedIndex){
+function HandleMove_Basic(clickedIndex){
     if(board[clickedIndex] === 0){
         redraw();
         return;
@@ -219,21 +272,21 @@ function CallAI(){
         }
 
         let aiMove = random(possible);
-        let turnChange = HandleMove(aiMove);
+        let turnChange = currentRule.HandleMove(aiMove);
 
         if(turnChange)
             currentPlayer = 1;
         else
             CallAI();
         
-        if(CheckGameEnd())
-            HandleScoring();
+        if(currentRule.CheckGameEnd())
+            currentRule.HandleScoring();
         else
             redraw();
     }, 500);
 }
 
-function CheckGameEnd(){
+function CheckGameEnd_Basic(){
     let p1PitsEmpty = true;
     for(let i = 0; i < p1Pits.length; i++){
         if(board[p1Pits[i]] > 0){
@@ -252,7 +305,17 @@ function CheckGameEnd(){
     return p1PitsEmpty || p2PitsEmpty;
 }
 
-function HandleScoring(){
+function HandleScoring_Basic(){
     redraw();
-    window.alert("ゲーム終了！");
+
+    if(currentMode === PVC && currentPlayer === 1)
+        window.alert("ゲーム終了！\nあなたの勝ち!");
+    else if(currentMode === PVC && currentPlayer === 2)
+        window.alert("ゲーム終了！\nCPUの勝ち!");
+    else if(currentMode === PVP){
+        if(currentPlayer === 1)
+            window.alert("ゲーム終了！\nプレイヤー1の勝ち!");
+        else
+            window.alert("ゲーム終了！\nプレイヤー2の勝ち!");
+    }
 }
