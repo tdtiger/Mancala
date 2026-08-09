@@ -14,6 +14,7 @@ let pitPositions = [];
 let gameState = "MENU";
 let menuButtons = [];
 
+// ルール名と使用する関数をまとめたもの
 const rules_basic = {
     name: "ベーシック",
     HandleMove: HandleMove_Basic,
@@ -34,12 +35,14 @@ let currentMode;
 let currentPlayer;
 let currentRule;
 
+// 初期化用
 function setup(){
     createCanvas(windowWidth, windowHeight);
     DrawMenu();
     noLoop();
 }
 
+// 状態に応じて画面を描画する
 function draw(){
     if(gameState === "MENU"){
         background(200, 180, 150);
@@ -80,13 +83,16 @@ function draw(){
     }
 }
 
+// マウスクリック時の挙動
 function mousePressed(){
     if(gameState !== "PLAYING" || currentRule.CheckGameEnd())
             return;
 
+    // クリックされた位置を計算
     let clickX = mouseX - offsetX;
     let clickY = mouseY - offsetY;
 
+    // プレイヤーの手番でなければ無視
     let canClick = false;
     if(currentPlayer === 1)
         canClick = true;
@@ -106,6 +112,7 @@ function mousePressed(){
 
         let turnChange = true;
         if(d < pos.size / 2){
+            // クリックされた穴が現在のプレイヤーの穴であるかを確認し、ルールに従って処理する
             if(currentPlayer === 1 && p1Pits.includes(i))
                 turnChange = currentRule.HandleMove(i);
             else if(currentPlayer === 2 && p2Pits.includes(i))
@@ -113,6 +120,7 @@ function mousePressed(){
             else
                 return;
 
+            // 画面を再描画
             redraw();
             if(turnChange){
                 currentPlayer = (currentPlayer === 1) ? 2 : 1;
@@ -128,13 +136,16 @@ function mousePressed(){
     }
 }
 
+// ウィンドウのサイズが変更された時の処理
 function windowResized(){
     resizeCanvas(windowWidth, windowHeight);
     CalculateLayout();
     redraw();
 }
 
+// メニュー画面の描画
 function DrawMenu(){
+    // コンピュータ対戦モードのボタン
     let btn_pvc = createButton("ベーシック(vs CPU)");
     btn_pvc.position(width / 2 - 100, height / 2 - 40);
     btn_pvc.size(200, 40);
@@ -143,6 +154,7 @@ function DrawMenu(){
     });
     menuButtons.push(btn_pvc);
 
+    // 2人対戦モードのボタン
     let btn_pvp = createButton("ベーシック(2人プレイ)");
     btn_pvp.position(width / 2 - 100, height / 2 + 20);
     btn_pvp.size(200, 40);
@@ -151,6 +163,7 @@ function DrawMenu(){
     });
     menuButtons.push(btn_pvp);
 
+    // コンピュータ対戦モードのボタン（カラハ）
     let btn_karah_pvc = createButton("カラハ(vs CPU)");
     btn_karah_pvc.position(width / 2 - 100, height / 2 + 80);
     btn_karah_pvc.size(200, 40);
@@ -159,6 +172,7 @@ function DrawMenu(){
     });
     menuButtons.push(btn_karah_pvc);
 
+    // 2人対戦モードのボタン（カラハ）
     let btn_karah_pvp = createButton("カラハ(2人プレイ)");
     btn_karah_pvp.position(width / 2 - 100, height / 2 + 140);
     btn_karah_pvp.size(200, 40);
@@ -168,13 +182,16 @@ function DrawMenu(){
     menuButtons.push(btn_karah_pvp);
 }
 
+// ゲーム開始時の処理
 function StartGame(rule, mode){
+    // 画面上のボタンを消す
     for(let btn of menuButtons)
             btn.hide();
 
     currentRule = rule;
     currentMode = mode;
 
+    // 盤面の初期化
     board = Array(14).fill(4);
     board[p1Goal] = 0;
     board[p2Goal] = 0;
@@ -187,6 +204,7 @@ function StartGame(rule, mode){
     redraw();
 }
 
+// 盤面のレイアウトを計算する
 function CalculateLayout(){
     let unitWidth = width / 8.5;
     let unitHeight = height / 3.0;
@@ -213,6 +231,7 @@ function CalculateLayout(){
     }
 }
 
+// 穴の描画
 function DrawPit(pos, seedCount){
     let size = pos.size;
 
@@ -233,6 +252,7 @@ function DrawPit(pos, seedCount){
     text(seedCount, pos.x, pos.y);
 }
 
+// 穴の中に種を散らすように描画
 function DrawSeeds(x, y, w, h, count){
     randomSeed(x + y);
 
@@ -250,6 +270,7 @@ function DrawSeeds(x, y, w, h, count){
     }
 }
 
+// 通常モードの手番処理
 function HandleMove_Basic(clickedIndex){
     if(board[clickedIndex] === 0){
         redraw();
@@ -281,6 +302,7 @@ function HandleMove_Basic(clickedIndex){
     return turnChange;
 }
 
+// カラハモードの手番処理
 function HandleMove_Kalah(clickedIndex){
     if(board[clickedIndex] === 0){
         redraw();
@@ -309,6 +331,7 @@ function HandleMove_Kalah(clickedIndex){
     if(lastIndex === p1Goal || lastIndex === p2Goal)
         turnChange = false;
 
+    // 最後の種が自分の空の穴に入った場合、相手の反対側の穴の種を自分のゴールに移動する
     if(turnChange){
         let isCapture = false;
         if(currentPlayer === 1 && p1Pits.includes(lastIndex) && board[lastIndex] === 1)
@@ -342,6 +365,7 @@ function CallAI(){
                 possible.push(p2Pits[i]);
         }
 
+        // とりあえず適当に一個選ぶだけ
         let aiMove = random(possible);
         let turnChange = currentRule.HandleMove(aiMove);
 
@@ -357,6 +381,7 @@ function CallAI(){
     }, 500);
 }
 
+// ゲーム終了の判定（通常モードとカラハモードで共通）
 function CheckGameEnd_Basic(){
     let p1PitsEmpty = true;
     for(let i = 0; i < p1Pits.length; i++){
@@ -376,6 +401,7 @@ function CheckGameEnd_Basic(){
     return p1PitsEmpty || p2PitsEmpty;
 }
 
+// ゲーム終了時のスコア処理（通常モード）
 function HandleScoring_Basic(){
     redraw();
 
@@ -391,7 +417,9 @@ function HandleScoring_Basic(){
     }
 }
 
+// ゲーム終了時のスコア処理（カラハモード）
 function HandleScoring_Karah(){
+    // 残っている種を各プレイヤーのゴールに移動する
     let p1Score = 0, p2Score = 0;
     for(let i = 0; i < p1Pits.length; i++){
         p1Score += board[p1Pits[i]];
@@ -402,6 +430,7 @@ function HandleScoring_Karah(){
     p1Score += board[p1Goal];
     p2Score += board[p2Goal];
 
+    // 再描画
     redraw();
 
     if(currentMode === PVC){
