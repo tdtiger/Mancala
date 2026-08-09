@@ -13,6 +13,7 @@ let pitPositions = [];
 
 let gameState = "MENU";
 let menuButtons = [];
+let returnButton;
 
 // ルール名と使用する関数をまとめたもの
 const rules_basic = {
@@ -182,6 +183,33 @@ function DrawMenu(){
     menuButtons.push(btn_karah_pvp);
 }
 
+// タイトルに戻るためのボタンを描画する
+function ShowReturnButton(){
+    returnButton = createButton("タイトルに戻る");
+
+    returnButton.position(width / 2 - 100, height / 2 + 100);
+    returnButton.size(200, 40);
+
+    returnButton.mousePressed(() => {
+        ReturnToMenu();
+    });
+}
+
+// タイトルに戻る
+function ReturnToMenu(){    
+    if(returnButton){
+        returnButton.remove();
+        returnButton = null;
+    }
+
+    gameState = "MENU";
+
+    for(let btn of menuButtons)
+        btn.show();
+
+    redraw();
+}
+
 // ゲーム開始時の処理
 function StartGame(rule, mode){
     // 画面上のボタンを消す
@@ -340,7 +368,7 @@ function HandleMove_Kalah(clickedIndex){
             isCapture = true;
 
         if(isCapture){
-            let oppositeIndex = 12 - currentIndex;
+            let oppositeIndex = 12 - lastIndex;
             if(board[oppositeIndex] > 0){
                 capturedSeeds = board[oppositeIndex] + board[lastIndex];
 
@@ -357,16 +385,129 @@ function HandleMove_Kalah(clickedIndex){
     return turnChange;
 }
 
+// このターンのみを考慮して、最前手を取るためのシミュレーション
+function SimulateMove(originalBoard, clickedIndex){
+    let simulatedBoard = [...originalBoard];
+
+    if(simulatedBoard[clickedIndex] === 0){
+        return {
+            board: simulatedBoard,
+            turnChange: true
+        };
+    }
+
+    let seedsToMove = simulatedBoard[clickedIndex];
+    simulatedBoard[clickedIndex] = 0;
+
+    let currentIndex = clickedIndex;
+    let lastIndex = -1;
+
+    while(seedsToMove > 0){
+        currentIndex = (currentIndex + 1) % 14;
+
+        simulatedBoard[currentIndex] += 1;
+        seedsToMove -= 1;
+
+        if(seedsToMove === 0)
+            lastIndex = currentIndex;
+    }
+
+    let turnChange = true;
+
+    // 最後の種がゴールに入った場合はもう一度
+    if(lastIndex === p1Goal || lastIndex === p2Goal)
+        turnChange = false;
+
+    if(currentRule === rules_karah && turnChange){
+        let isCapture = false;
+
+        if(currentPlayer === 2 && p2Pits.includes(lastIndex) && simulatedBoard[lastIndex] === 1)
+            isCapture = true;
+
+        if(isCapture){
+            let oppositeIndex = 12 - currentIndex;
+
+            if(simulatedBoard[oppositeIndex] > 0){
+                let capturedSeeds = simulatedBoard[oppositeIndex] + simulatedBoard[lastIndex];
+
+                simulatedBoard[p2Goal] += capturedSeeds;
+                simulatedBoard[oppositeIndex] = 0;
+                simulatedBoard[lastIndex] = 0;
+            }
+        }
+    }
+
+    return {
+        board: simulatedBoard,
+        turnChange: turnChange
+    };
+}
+
+// 盤面の評価
+function EvaluateBoard(simulatedBoard){
+    let score = 0;
+    
+    // CPUのゴール
+    score += simulatedBoard[p2Goal] * 10;
+
+    // CPUの穴の種の数
+    for(let i = 0; i < p2Pits.length; i++)
+        score += simulatedBoard[p2Pits[i]];
+    
+    // プレイヤーのゴール
+    score -= simulatedBoard[p1Goal] * 10;
+
+    // プレイヤーの穴の種の数
+    for(let i = 0; i < p1Pits.length; i++)
+        score -= simulatedBoard[p1Pits[i]];
+    
+    return score;
+}
+
+// シミュレーションを繰り返し行い、最も良い手を選ぶ
+function GetBestMove(){
+    let possible = [];
+
+    for(let i = 0; i < p2Pits.length; i++){
+        let pit = p2Pits[i];
+
+        if(board[pit] > 0)
+            possible.push(pit);
+    }
+
+    if(possible.length === 0)
+        return -1;
+
+    let bestMove = possible[0];
+    let bestScore = -Infinity;
+
+    for(let move of possible){
+        // 盤面を動かしてみて
+        let result = SimulateMove(board, move);
+        // その結果を評価
+        let score = EvaluateBoard(result.board);
+
+        // もう一度自分のターンになる手は評価高め
+        if(!result.turnChange)
+            score += 5;
+
+        if(score > bestScore){
+            bestScore = score;
+            bestMove = move;
+        }
+    }
+
+    return bestMove;
+}
+
+// AIの手番処理
 function CallAI(){
     setTimeout(() =>{
-        let possible = [];
-        for(let i = 0; i < p2Pits.length; i++){
-            if(board[p2Pits[i]] > 0)
-                possible.push(p2Pits[i]);
-        }
+        let aiMove = GetBestMove();
 
-        // とりあえず適当に一個選ぶだけ
-        let aiMove = random(possible);
+        if(aiMove === -1)
+            return;
+
         let turnChange = currentRule.HandleMove(aiMove);
 
         if(turnChange)
@@ -405,16 +546,20 @@ function CheckGameEnd_Basic(){
 function HandleScoring_Basic(){
     redraw();
 
-    if(currentMode === PVC && currentPlayer === 1)
-        window.alert("ゲーム終了！\nあなたの勝ち!");
-    else if(currentMode === PVC && currentPlayer === 2)
-        window.alert("ゲーム終了！\nCPUの勝ち!");
-    else if(currentMode === PVP){
-        if(currentPlayer === 1)
-            window.alert("ゲーム終了！\nプレイヤー1の勝ち!");
-        else
-            window.alert("ゲーム終了！\nプレイヤー2の勝ち!");
-    }
+    setTimeout(() => {
+        if(currentMode === PVC && currentPlayer === 1)
+            window.alert("ゲーム終了！\nあなたの勝ち!");
+        else if(currentMode === PVC && currentPlayer === 2)
+            window.alert("ゲーム終了！\nCPUの勝ち!");
+        else if(currentMode === PVP){
+            if(currentPlayer === 1)
+                window.alert("ゲーム終了！\nプレイヤー1の勝ち!");
+            else
+                window.alert("ゲーム終了！\nプレイヤー2の勝ち!");
+        }
+
+        ShowReturnButton();
+    }, 100);
 }
 
 // ゲーム終了時のスコア処理（カラハモード）
@@ -433,20 +578,24 @@ function HandleScoring_Karah(){
     // 再描画
     redraw();
 
-    if(currentMode === PVC){
-        if(p1Score > p2Score)
-            window.alert(`あなたの勝ち!\n\nあなた: ${p1Score} - CPU: ${p2Score}`);
-        else if(p2Score > p1Score)
-            window.alert(`CPUの勝ち!\n\nあなた: ${p1Score} - CPU: ${p2Score}`);
-        else
-            window.alert(`引き分け!\n\nあなた: ${p1Score} - CPU: ${p2Score}`);
-    }
-    else if(currentMode === PVP){
-        if(p1Score > p2Score)
-            window.alert(`プレイヤー1の勝ち!\n\nプレイヤー1: ${p1Score} - プレイヤー2: ${p2Score}`);
-        else if(p2Score > p1Score)
-            window.alert(`プレイヤー2の勝ち!\n\nプレイヤー1: ${p1Score} - プレイヤー2: ${p2Score}`);
-        else
-            window.alert(`引き分け!\n\nプレイヤー1: ${p1Score} - プレイヤー2: ${p2Score}`);
-    }
+    setTimeout(() => {
+        if(currentMode === PVC){
+            if(p1Score > p2Score)
+                window.alert(`あなたの勝ち!\n\nあなた: ${p1Score} - CPU: ${p2Score}`);
+            else if(p2Score > p1Score)
+                window.alert(`CPUの勝ち!\n\nあなた: ${p1Score} - CPU: ${p2Score}`);
+            else
+                window.alert(`引き分け!\n\nあなた: ${p1Score} - CPU: ${p2Score}`);
+        }
+        else if(currentMode === PVP){
+            if(p1Score > p2Score)
+                window.alert(`プレイヤー1の勝ち!\n\nプレイヤー1: ${p1Score} - プレイヤー2: ${p2Score}`);
+            else if(p2Score > p1Score)
+                window.alert(`プレイヤー2の勝ち!\n\nプレイヤー1: ${p1Score} - プレイヤー2: ${p2Score}`);
+            else
+                window.alert(`引き分け!\n\nプレイヤー1: ${p1Score} - プレイヤー2: ${p2Score}`);
+        }
+
+        showReturnButton();
+    }, 100);
 }
